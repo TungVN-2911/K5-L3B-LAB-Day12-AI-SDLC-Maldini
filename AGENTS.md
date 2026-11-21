@@ -29,4 +29,4 @@
 
 ## Skills / hooks của nhóm
 - `smoke-verifier` (`.agents/skills/smoke-verifier/`): Kiểm tra toàn diện 70 unit tests, tính xác định headless byte-to-byte và pipeline xuất nhập kho trước khi tích hợp hoặc commit.
-- `scenario-generator` (`.agents/skills/scenario-generator/`): Thiết kế và kiểm tra các kịch bản biên (nhiều cá, thiếu oxy, khách dồn dập) dùng với cờ `--scenario`.
+- `scenario-generator` (`.agents/skills/scenario-generator/`): Thiết kế và kiểm tra các kịch bản biên (nhiều cá, thiếu oxy, khách dồn dập) dùng với cờ `--scenario`. 
