@@ -28,4 +28,5 @@
 - Sáng tạo thêm được khuyến khích nhưng phải tắt ở headless (xem README, mục "Tự do sáng tạo").
 
 ## Skills / hooks của nhóm
-- (Ghi tên và khi nào dùng; tối thiểu 2 skill/hook/command nhóm tự viết, đặt ở `.agents/skills/` hoặc tương đương.)
+- `smoke-verifier` (`.agents/skills/smoke-verifier/`): Kiểm tra toàn diện 70 unit tests, tính xác định headless byte-to-byte và pipeline xuất nhập kho trước khi tích hợp hoặc commit.
+- `scenario-generator` (`.agents/skills/scenario-generator/`): Thiết kế và kiểm tra các kịch bản biên (nhiều cá, thiếu oxy, khách dồn dập) dùng với cờ `--scenario`.
