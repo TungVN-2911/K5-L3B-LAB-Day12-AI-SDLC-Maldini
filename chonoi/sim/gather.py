@@ -66,6 +66,8 @@ class GatherSim:
         # Đàn cá đứng yên ở phase này. Cá bơi / sinh thêm là việc của phase sau.
         self.fish = [{"id": f["id"], "kind": f["kind"], "pos": [float(c) for c in f["pos"]],
                       "heading_deg": f.get("heading_deg", 0)} for f in src_fish]
+        self.live_mode = False
+        self.live_tick = 0
         for coll in (self.nodes, self.fish):
             for e in coll:
                 ids.reserve(e["id"])
@@ -98,6 +100,8 @@ class GatherSim:
     # --- một bước ---------------------------------------------------------------
     def step(self, inp):
         events = []
+        if self.live_mode:
+            self._move_live_fish()
         # 1. đồng hồ và hàng có sẵn: giảm bộ đếm, nút mọc lại
         self.time_left_ticks = max(0, self.time_left_ticks - 1)
         self.invuln_ticks = max(0, self.invuln_ticks - 1)
@@ -169,6 +173,19 @@ class GatherSim:
         if self.time_left_ticks <= 0:
             self._finish("time", events)
         return events
+
+    def _move_live_fish(self):
+        """Chuyển động trang trí chỉ dành cho live UI; headless không bật cờ này."""
+        self.live_tick += 1
+        b = self.t["bounds"]
+        for i, fish in enumerate(sort_by_id(self.fish)):
+            base = fish.setdefault("_live_base", list(fish["pos"]))
+            phase = (i + 1) * 0.9
+            span = min(4.0, max(1.6, self.t["catch_radius"] * 1.6))
+            fish["pos"][0] = max(b["x"][0], min(b["x"][1], base[0] + math.sin(self.live_tick / 24 + phase) * span))
+            fish["pos"][1] = max(self.t["surface_depth"] + 0.7,
+                                  min(b["d"][1], base[1] + math.sin(self.live_tick / 36 + phase) * 0.8))
+            fish["heading_deg"] = 0 if math.cos(self.live_tick / 24 + phase) >= 0 else 180
 
     # --- tiện ích ---------------------------------------------------------------
     def _at_surface(self) -> bool:

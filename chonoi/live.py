@@ -57,6 +57,17 @@ class LiveGame:
             self.session = DaySession(self.tuning, self._args[3])
         else:
             self.session = Session(*self._args)
+            if self.mode == "gather":
+                self.session.sim.live_mode = True
+                scenario = self._args[2]
+                if "fish" not in scenario and scenario.get("random_fish", True):
+                    # Cá sáng tạo chỉ có trong live UI; headless vẫn giữ contract 6 đàn cá.
+                    for fish in (
+                        {"id": "F7", "kind": "ca_linh", "pos": [22.0, 20.0], "heading_deg": 0},
+                        {"id": "F8", "kind": "ca_loc", "pos": [82.0, 22.0], "heading_deg": 180},
+                    ):
+                        self.session.sim.fish.append(fish)
+                        self.session.sim.ids.reserve(fish["id"])
         self.inputs = LiveInputs()
         self.events = []
         self._saved = False
