@@ -9,7 +9,7 @@ Máy chủ HTTP nhỏ (ThreadingHTTPServer) phục vụ `chonoi/web/index.html` 
     GET  /state  -> snapshot JSON hiện tại (cùng trường như dòng snapshot của headless) + `meta` + `events`
     POST /input  -> {"move": [a, b], "interact": bool, "catch": bool}   (trạng thái phím đang giữ)
     POST /restart -> chơi lại từ đầu (cùng seed, cùng scenario)
-    POST /action -> lệnh rời rạc của bảng nấu (chỉ --mode day): {"type": "cook"|"quick_cook"|"close"|"trash", ...}
+    POST /action -> lệnh rời rạc của bảng nấu (chỉ --mode day): {"type": "cook"|"quick_cook"|"close"|"trash"|"buy"|"sell", ...}
 
 Mô phỏng chạy 60 tick/s trong một luồng nền, dùng CÙNG lớp sim như headless (qua `runner.Session`).
 Client chỉ ĐỌC snapshot và tự bỏ qua trường chưa có, nên luật do nhóm viết thêm trường nào cũng không vỡ.
@@ -134,8 +134,10 @@ class LiveGame:
 
     def action(self, body: dict):
         kind = body.get("type")
-        if kind not in ("cook", "quick_cook", "close", "trash"):
-            raise ValueError("type phải là cook | quick_cook | close | trash")
+        if kind not in ("cook", "quick_cook", "close", "trash", "buy", "sell"):
+            raise ValueError("type phải là cook | quick_cook | close | trash | buy | sell")
+        if kind in ("buy", "sell") and not isinstance(body.get("item"), str):
+            raise ValueError("buy / sell cần item")
         if kind == "quick_cook" and not isinstance(body.get("dish_id"), str):
             raise ValueError("quick_cook cần dish_id")
         if kind == "cook":
@@ -153,7 +155,7 @@ class LiveGame:
         with self._lock:
             if not hasattr(self.session, "queue_action"):
                 raise ValueError("/action chỉ dùng với --mode day")
-            self.session.queue_action({k: body[k] for k in ("type", "stove_id", "dish_id", "ingredients") if k in body})
+            self.session.queue_action({k: body[k] for k in ("type", "stove_id", "dish_id", "ingredients", "item") if k in body})
 
     def restart(self):
         with self._lock:

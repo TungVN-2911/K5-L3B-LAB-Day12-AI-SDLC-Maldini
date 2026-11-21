@@ -1,4 +1,4 @@
-"""Test phần SÁNG TẠO (chỉ chạy ở `chonoi.live --mode day`): buff dưới nước, cá lớn có Máu,
+"""Test phần SÁNG TẠO (chỉ chạy ở `chonoi.live --mode day`): buff dưới nước, ghe tạp hóa + đồ nghề, cá lớn có Máu,
 quán nhiều khách + nấu theo nguyên liệu + cảm xúc khách, và vòng lặp sáng -> tối -> sáng."""
 
 import copy
@@ -23,65 +23,144 @@ def names(events):
 
 
 class GatherPlusTest(unittest.TestCase):
-    def make(self, configure=None):
+    def make(self, money=1000, slots=(), configure=None):
         tuning = load_contract()["tuning"]
         extras = load_extras()
         extras["gather"]["pickup_first_s"] = 9999  # không sinh buff ngẫu nhiên trong test
         extras["gather"]["fish_respawn_s"] = 9999
         if configure:
             configure(extras)
-        return GatherPlus(tuning, {"random_fish": False}, Streams(3), IdAllocator(), extras)
+        profile = {"money": money, "slots": list(slots), "armor_hp": 3 if "armor" in slots else 0, "basket_level": 0}
+        return GatherPlus(tuning, {"random_fish": False}, Streams(3), IdAllocator(), extras, profile)
 
-    def test_oxy_pickup_refills_and_shields(self):
+    def open_shop(self, g):
+        g.pos = list(map(float, g.shop["pos"]))
+        ev = g.step(inp((0.0, 0.0), "interact"))
+        self.assertIn("shop_open", names(ev))
+        self.assertFalse(g.done, "E ở ghe tạp hóa không được cập bến")
+
+    def buy(self, g, item):
+        g.queue_action({"type": "buy", "item": item})
+        return dict(g.step(inp()))
+
+    # --- buff dưới nước -------------------------------------------------------
+    def test_speed_pickup_boosts_swim_speed(self):
+        g = self.make()
+        base = g.t["swim_speed"]
+        g.pos = [20.0, 10.0]
+        g.pickups = [{"id": "P1", "kind": "speed", "pos": [20.0, 10.0]}]
+        self.assertIn("pickup", names(g.step(inp())))
+        self.assertGreater(g.t["swim_speed"], base)
+        for _ in range(60 * 9):
+            g.step(inp())
+        self.assertAlmostEqual(g.t["swim_speed"], base)
+
+    def test_heal_pickup_adds_hp_only_when_hurt(self):
         g = self.make()
         g.pos = [20.0, 10.0]
-        g.oxygen_ticks = 100
-        g.pickups = [{"id": "P1", "kind": "oxy", "pos": [20.0, 10.0]}]
-        ev = g.step(inp())
-        self.assertIn("pickup", names(ev))
-        self.assertEqual(g.oxygen_ticks, g.oxygen_max)
+        g.pickups = [{"id": "P1", "kind": "heal", "pos": [20.0, 10.0]}]
         g.step(inp())
-        self.assertEqual(g.oxygen_ticks, g.oxygen_max, "khiên oxy: dưới nước không tụt oxy")
+        self.assertEqual(len(g.pickups), 1, "đủ máu thì không nhặt")
+        g.hp = 1
+        g.step(inp())
+        self.assertEqual((g.hp, g.pickups), (2, []))
 
-    def test_net_catches_every_fish_in_wider_radius(self):
+    # --- ghe tạp hóa ----------------------------------------------------------
+    def test_shop_buy_slots_unique_and_limited(self):
+        g = self.make(money=2000)
+        self.open_shop(g)
+        ev = self.buy(g, "gun")
+        self.assertIn("shop_buy", ev)
+        self.assertEqual(g.profile["money"], 2000 - g.shop["items"]["gun"]["price"])
+        self.assertEqual(self.buy(g, "gun")["shop_fail"]["reason"], "owned")
+        for item in ("net", "armor", "tank", "fins"):
+            self.assertIn("shop_buy", self.buy(g, item))
+        self.assertEqual(len(g.profile["slots"]), 5)
+        self.assertEqual(self.buy(g, "knife")["shop_fail"]["reason"], "slots")
+        money = g.profile["money"]
+        g.queue_action({"type": "sell", "item": "fins"})
+        ev = dict(g.step(inp()))
+        self.assertEqual(g.profile["money"], money + ev["shop_sell"]["money_got"])
+        self.assertIn("shop_buy", self.buy(g, "knife"))
+
+    def test_shop_needs_money_and_being_near(self):
+        g = self.make(money=10)
+        self.open_shop(g)
+        self.assertEqual(self.buy(g, "net")["shop_fail"]["reason"], "money")
+        g = self.make(money=1000)
+        g.queue_action({"type": "buy", "item": "net"})  # chưa mở tiệm
+        g.step(inp())
+        self.assertEqual(g.profile["slots"], [])
+
+    def test_tank_and_basket_upgrade(self):
         g = self.make()
+        oxy, cap = g.oxygen_max, g.t["hold_capacity"]
+        self.open_shop(g)
+        self.buy(g, "tank")
+        self.assertEqual(g.oxygen_max, oxy + g.shop["items"]["tank"]["oxygen_bonus_s"] * 60)
+        self.buy(g, "basket")
+        self.assertEqual(g.t["hold_capacity"], cap + g.shop["basket"]["step"])
+        self.assertNotIn("basket", g.profile["slots"], "nâng cấp giỏ không chiếm ô đồ")
+
+    def test_armor_absorbs_bites_then_breaks_and_can_be_rebought(self):
+        g = self.make(slots=("armor",))
+        bf = g.big_fish[0]
+        for i in range(3):
+            g.invuln_ticks = 0
+            g.pos = list(bf["pos"])
+            ev = g.step(inp())
+            self.assertIn("armor_hit", names(ev))
+        self.assertIn("armor_broken", names(ev))
+        self.assertEqual(g.hp, g.t["hp_max"], "giáp đỡ hết, không mất Máu")
+        self.assertNotIn("armor", g.profile["slots"])
+        self.open_shop(g)
+        self.assertIn("shop_buy", self.buy(g, "armor"))
+
+    # --- đồ nghề dưới nước ----------------------------------------------------
+    def test_net_catches_every_fish_in_wider_radius(self):
+        g = self.make(slots=("net",))
         g.pos = [20.0, 10.0]
-        g.buffs["net_ticks"] = 600
         g.fish = [{"id": "F1", "kind": "ca_loc", "pos": [22.5, 10.0], "heading_deg": 0},
-                  {"id": "F2", "kind": "ca_loc", "pos": [17.5, 10.0], "heading_deg": 0}]
+                  {"id": "F2", "kind": "ca_he_vang", "pos": [17.5, 10.0], "heading_deg": 0}]
         ev = g.step(inp((0.0, 0.0), "catch"))
         self.assertEqual(names(ev).count("fish_caught"), 2)
-        self.assertEqual(g.hold, ["ca_loc", "ca_loc"])
+        self.assertEqual(sorted(g.hold), ["ca_he_vang", "ca_loc"])
 
     def test_harpoon_damages_and_defeats_big_fish(self):
-        g = self.make()
+        g = self.make(slots=("gun",))
+        self.assertEqual(g.gun_ammo, g.shop["items"]["gun"]["ammo_per_dive"])
         bf = g.big_fish[0]
-        g.pos = [bf["pos"][0] - 4.0, bf["pos"][1]]
-        g.heading = 0.0
-        g.buffs["gun_ammo"] = 5
         defeated = False
         for i in range(400):
             g.pos = [bf["pos"][0] - 4.0, bf["pos"][1]]  # đứng yên ngắm
+            g.heading = 0.0
             g.invuln_ticks = 999
             ev = g.step(inp((0.0, 0.0), "catch") if i % 25 == 0 else inp())
             if "big_fish_defeated" in names(ev):
                 defeated = True
                 break
         self.assertTrue(defeated)
-        self.assertFalse(bf["alive"])
         self.assertIn(bf["kind"], g.hold, "hạ cá lớn rơi nguyên liệu vào giỏ")
 
-    def test_big_fish_bites_player_and_can_faint(self):
-        g = self.make()
-        g.hp = 1
-        g.hold = ["ca_loc"]
+    def test_knife_doubles_melee_damage(self):
+        g = self.make(slots=("knife",))
         bf = g.big_fish[0]
-        g.pos = list(bf["pos"])
+        g.pos = [bf["pos"][0] - 2.0, bf["pos"][1]]
+        g.invuln_ticks = 999
+        ev = dict(g.step(inp((0.0, 0.0), "catch")))
+        self.assertEqual(ev["big_fish_hit"]["damage"], 2)
+
+    def test_boss_catfish_bites_two_hp_and_can_faint(self):
+        g = self.make()
+        boss = next(f for f in g.big_fish if f["kind"] == "ca_tra_dau")
+        self.assertEqual(g.x["big_kinds"]["ca_tra_dau"]["damage"], 2)
+        g.hp = 2
+        g.hold = ["ca_loc"]
+        g.pos = list(boss["pos"])
         ev = g.step(inp())
         self.assertIn("player_hurt", names(ev))
         self.assertTrue(g.done)
-        self.assertEqual(g.reason, "fainted")
-        self.assertEqual(g.hold, [])
+        self.assertEqual((g.reason, g.hold), ("fainted", []))
 
 
 class QuanPlusTest(unittest.TestCase):
@@ -206,6 +285,22 @@ class DaySessionTest(unittest.TestCase):
             d.step(inp())
         self.assertEqual(d.sim.mode, "gather")
         self.assertEqual(d.day, 2)
+
+    def test_money_and_gear_carry_over_to_next_day(self):
+        d = DaySession(load_contract()["tuning"], 1)
+        self.assertEqual(d.snapshot()["money"], d.x["day"]["start_money"])
+        d.sim.pos = list(map(float, d.sim.shop["pos"]))
+        d.step(inp((0.0, 0.0), "interact"))
+        d.queue_action({"type": "buy", "item": "armor"})
+        d.step(inp())
+        self.assertEqual(d.profile["slots"], ["armor"])
+        d.sim.pos = [2.0, 0.0]
+        d.step(inp((0.0, 0.0), "interact"))  # cập bến, giỏ trống -> sang sáng hôm sau
+        while d.transition:
+            d.step(inp())
+        self.assertEqual(d.day, 2)
+        self.assertEqual(d.sim.profile["slots"], ["armor"])
+        self.assertEqual(d.snapshot()["gear"]["armor_hp"], 3)
 
     def test_no_cookable_haul_skips_evening(self):
         d = DaySession(load_contract()["tuning"], 1)

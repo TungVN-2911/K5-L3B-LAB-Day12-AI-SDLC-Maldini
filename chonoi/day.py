@@ -12,7 +12,7 @@ import math
 
 from .ids import IdAllocator
 from .rng import Streams
-from .sim.extras import GatherPlus, QuanPlus, load_extras, makeable, merged_tuning
+from .sim.extras import GatherPlus, QuanPlus, load_extras, makeable, merged_tuning, new_profile
 
 TICK = 60
 
@@ -27,7 +27,7 @@ class DaySession:
         self.seed = seed
         self.tick = 0
         self.day = 1
-        self.bank = 0
+        self.profile = new_profile(self.x)  # tiền + đồ nghề, sống qua các ngày
         self.earned = 0
         self.reputation = tuning["quan"]["reputation_initial"]
         self.stock = {k: v for k, v in self.x["day"].get("start_stock", {}).items() if v > 0}
@@ -39,6 +39,10 @@ class DaySession:
     @property
     def done(self) -> bool:
         return self.sim.done and self.sim.reason == "error"  # chỉ dừng hẳn khi luật lỗi
+
+    @property
+    def bank(self) -> int:
+        return self.profile["money"]
 
     def queue_action(self, action: dict):
         if not self.transition and hasattr(self.sim, "queue_action"):
@@ -104,7 +108,7 @@ class DaySession:
         self.phase_no += 1
         streams, ids = Streams(self.seed * 1000 + self.phase_no), IdAllocator()
         if mode == "gather":
-            self.sim = GatherPlus(self.tuning, {}, streams, ids, self.x)
+            self.sim = GatherPlus(self.tuning, {}, streams, ids, self.x, self.profile)
         else:
             self.sim = QuanPlus(self.tuning, {"reputation": self.reputation}, streams, ids, dict(self.stock), self.x)
         self.phase_tick = 0
@@ -124,7 +128,7 @@ class DaySession:
             if makeable(self.menu, self.stock):
                 return [self._transition("gather", "quan", sim.reason, haul=haul)]
             return [self._transition("gather", "gather", sim.reason, haul=haul, next_day=True, skip="no_dish")]
-        self.bank += sim.money
+        self.profile["money"] += sim.money
         self.earned += sim.earned
         self.reputation = sim.reputation
         self.stock = {k: v for k, v in sim.stock.items() if v > 0}

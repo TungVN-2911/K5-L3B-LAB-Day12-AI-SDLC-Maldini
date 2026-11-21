@@ -2,15 +2,18 @@
   "_note": "Số liệu phần SÁNG TẠO của nhóm. Chỉ dùng ở cửa sổ chơi `python -m chonoi.live --mode day`; headless / Test Contract không đọc file này.",
   "day": {
     "transition_s": 4,
-    "start_stock": {}
+    "start_stock": {},
+    "start_money": 150
   },
   "gather": {
     "fish_respawn_s": 12,
     "fish_max": 8,
-    "fish_kinds": [
-      "ca_linh",
-      "ca_loc"
-    ],
+    "fish_kinds": {
+      "ca_he_vang": 2,
+      "ca_linh": 4,
+      "ca_loc": 3,
+      "ca_tai_tuong": 2
+    },
     "fish_x": [
       8,
       96
@@ -32,26 +35,16 @@
       27
     ],
     "pickup_weights": {
-      "gun": 3,
-      "net": 3,
-      "oxy": 4
+      "heal": 3,
+      "speed": 5
     },
     "buffs": {
-      "oxy": {
-        "shield_s": 10
+      "speed": {
+        "duration_s": 8,
+        "mult": 1.6
       },
-      "net": {
-        "duration_s": 15,
-        "radius_mult": 1.8
-      },
-      "gun": {
-        "ammo": 8,
-        "ammo_max": 16,
-        "damage": 2,
-        "speed": 18,
-        "range": 10,
-        "cooldown_s": 0.3,
-        "fish_hit_radius": 1.0
+      "heal": {
+        "hp": 1
       }
     },
     "melee_damage": 1,
@@ -83,6 +76,45 @@
           "ca_bong_lau": 1
         },
         "respawn_s": 40
+      },
+      "luon_dien": {
+        "hp": 5,
+        "speed": 3.0,
+        "chase_speed": 3.5,
+        "aggro": 6,
+        "hit_radius": 1.1,
+        "damage": 1,
+        "min_depth": 6,
+        "drop": {
+          "luon": 1
+        },
+        "respawn_s": 35
+      },
+      "ca_hai_tuong": {
+        "hp": 10,
+        "speed": 1.8,
+        "chase_speed": 3.0,
+        "aggro": 6,
+        "hit_radius": 2.0,
+        "damage": 1,
+        "min_depth": 8,
+        "drop": {
+          "ca_hai_tuong": 1
+        },
+        "respawn_s": 50
+      },
+      "ca_tra_dau": {
+        "hp": 14,
+        "speed": 1.5,
+        "chase_speed": 2.8,
+        "aggro": 7,
+        "hit_radius": 2.5,
+        "damage": 2,
+        "min_depth": 20,
+        "drop": {
+          "ca_tra_dau": 1
+        },
+        "respawn_s": 60
       }
     },
     "big_fish_spawns": [
@@ -100,6 +132,30 @@
       },
       {
         "id": "BF2",
+        "kind": "luon_dien",
+        "pos": [
+          58,
+          12
+        ],
+        "patrol": [
+          50,
+          68
+        ]
+      },
+      {
+        "id": "BF3",
+        "kind": "ca_hai_tuong",
+        "pos": [
+          72,
+          16
+        ],
+        "patrol": [
+          62,
+          84
+        ]
+      },
+      {
+        "id": "BF4",
         "kind": "ca_bong_lau",
         "pos": [
           82,
@@ -109,9 +165,91 @@
           66,
           96
         ]
+      },
+      {
+        "id": "BF5",
+        "kind": "ca_tra_dau",
+        "pos": [
+          92,
+          27
+        ],
+        "patrol": [
+          84,
+          99
+        ]
       }
     ],
-    "big_recoil_s": 2.5
+    "big_recoil_s": 2.5,
+    "fish_yield_extra": {
+      "ca_he_vang": 1,
+      "ca_tai_tuong": 1
+    },
+    "fish_initial_extra": [
+      {
+        "id": "F7",
+        "kind": "ca_he_vang",
+        "pos": [
+          22,
+          8
+        ]
+      },
+      {
+        "id": "F8",
+        "kind": "ca_tai_tuong",
+        "pos": [
+          52,
+          20
+        ]
+      }
+    ],
+    "shop": {
+      "pos": [
+        7.5,
+        0
+      ],
+      "radius": 1.8,
+      "slots": 5,
+      "sell_rate": 0.5,
+      "items": {
+        "gun": {
+          "price": 120,
+          "ammo_per_dive": 12,
+          "damage": 2,
+          "speed": 18,
+          "range": 10,
+          "cooldown_s": 0.3,
+          "fish_hit_radius": 1.0
+        },
+        "net": {
+          "price": 90,
+          "radius_mult": 1.8
+        },
+        "armor": {
+          "price": 70,
+          "armor_hp": 3
+        },
+        "tank": {
+          "price": 100,
+          "oxygen_bonus_s": 20
+        },
+        "fins": {
+          "price": 80,
+          "speed_mult": 1.25
+        },
+        "knife": {
+          "price": 60,
+          "melee_damage": 2
+        }
+      },
+      "basket": {
+        "step": 4,
+        "prices": [
+          80,
+          150,
+          250
+        ]
+      }
+    }
   },
   "quan": {
     "override": {
@@ -282,6 +420,44 @@
       },
       "cook_s": 9,
       "price": 200
+    },
+    "ca_he_kho_to": {
+      "recipe": {
+        "ca_he_vang": 1
+      },
+      "cook_s": 6,
+      "price": 80
+    },
+    "ca_tai_tuong_chien_xu": {
+      "recipe": {
+        "bong_sung": 1,
+        "ca_tai_tuong": 1
+      },
+      "cook_s": 7,
+      "price": 110
+    },
+    "luon_xao_sa_ot": {
+      "recipe": {
+        "bong_dien_dien": 1,
+        "luon": 1
+      },
+      "cook_s": 8,
+      "price": 160
+    },
+    "ca_hai_tuong_nuong": {
+      "recipe": {
+        "ca_hai_tuong": 1
+      },
+      "cook_s": 9,
+      "price": 260
+    },
+    "lau_ca_tra_dau": {
+      "recipe": {
+        "bong_sung": 1,
+        "ca_tra_dau": 1
+      },
+      "cook_s": 10,
+      "price": 350
     }
   }
 }

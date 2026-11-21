@@ -66,9 +66,12 @@ Hết giờ mỗi phase thì gắn tag rồi đi tiếp; chỗ chưa xong ghi tr
 **Chế độ "một ngày" liền mạch** — `python3 -m chonoi.live --mode day`. Hướng dẫn chơi chi tiết: [Play.md](Play.md). Đây chỉ là cửa sổ chơi; headless và Test Contract vẫn chạy `GatherSim`/`QuanSim` gốc.
 - **Vòng lặp:** sáng lặn bắt cá → cập bến / hết giờ → màn chuyển cảnh → tối mở quán với kho = kho còn dư + giỏ vừa bắt → hết giờ hoặc **hết hàng để bán** → thông báo rồi quay lại sông vào ngày hôm sau. Nếu kho không đủ nấu món nào thì bỏ qua buổi tối. Tiền và uy tín cộng dồn qua các ngày.
 - **Dưới nước** (`GatherPlus`):
-  - Có buff **Bình oxy** (đầy oxy, kèm khiên không tụt oxy), **Lưới lớn** (bán kính rộng hơn, một lần bắt hết cá trong tầm) và **Súng xiên** (Space bắn theo hướng mặt, có giới hạn đạn).
-  - **Cá lớn có Máu** (cá đuối, cá bông lau) tuần tra; khi thấy người chơi thì đuổi, cắn trúng thì trừ Máu. Đánh bằng Space hoặc súng xiên; hạ được thì rơi nguyên liệu quý cho món đắt tiền.
-  - Cá nhỏ sinh thêm theo thời gian.
+  - Buff nhặt dưới nước: **Tăng tốc** (bơi nhanh 8 giây) và **Hồi máu** (+1 tim).
+  - **Tiệm đồ lặn** (ghe cạnh bến, `E` ở mặt nước): súng xiên, lưới lớn, giáp bong bóng (đỡ 3 cú cắn, vỡ rồi mới mua lại), bình lặn, chân vịt, dao găm, cộng thêm nâng cấp giỏ.
+    - **5 ô đồ**, mỗi món 1 cái, không chồng; hết ô thì không mua được, bán lại được nửa giá.
+    - Tiền và đồ giữ qua các ngày.
+  - Thợ lặn đeo **giỏ tre ở thắt lưng** (đầy dần theo số đồ bắt được); đồ mua được vẽ ngay trên người.
+  - **Cá khủng có Máu:** cá đuối, lươn điện, cá hải tượng, cá bông lau, trùm cá tra dầu (cắn mất 2 tim). Có thêm **cá lạ** (cá hề vàng, cá tai tượng) và món mới cho từng loại.
 - **Quán nhìn ngang** (`QuanPlus`):
   - Quầy bar 8 ghế, 3 bếp, nhiều khách cùng lúc. Bảng món trên vách cho biết mỗi món còn nấu được bao nhiêu phần.
   - Bấm E ở bếp trống để mở bảng nấu, có hai cách: **giao món cho bếp tự nấu** (chậm, ngon vừa) hoặc **tự chọn nguyên liệu** (đúng công thức thì nhanh và ngon nhất; sai thì hỏng món, mất nguyên liệu). Món để lâu trên bếp sẽ **nguội**.

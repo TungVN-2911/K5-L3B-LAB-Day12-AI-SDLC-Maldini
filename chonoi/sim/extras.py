@@ -4,11 +4,13 @@ Headless / Test Contract KHÔNG dùng file này: `GatherSim`, `QuanSim` gốc gi
 Hai lớp con ở đây thêm luật mới lên trên lớp gốc:
 
 GatherPlus (buổi sáng):
-  - vật phẩm buff dưới nước: `oxy` (đầy oxy + không tụt oxy một lúc), `net` (lưới lớn: bán kính bắt
-    rộng hơn, một lần bắt hết cá trong tầm), `gun` (súng xiên: Space bắn mũi xiên theo hướng mặt)
-  - cá lớn có Máu (cá đuối, cá bông lau): tuần tra, thấy người thì đuổi, chạm thì trừ Máu người chơi;
-    đánh bằng Space (cận chiến) hoặc súng xiên; hạ được thì rơi nguyên liệu quý vào giỏ, sau đó hồi sinh
-  - cá nhỏ sinh thêm theo thời gian để chơi nhiều ngày
+  - buff nhặt dưới nước: `speed` (tăng tốc bơi một lúc), `heal` (+1 Máu)
+  - ghe tạp hóa trên bờ (E ở mặt nước cạnh ghe): mua súng xiên, lưới lớn, giáp bong bóng, bình lặn,
+    chân vịt, dao găm (5 ô đồ, mỗi món 1 cái, không chồng; giáp chỉ mua lại khi đã vỡ), nâng cấp giỏ;
+    bán lại đồ được nửa giá. Tiền và đồ sống qua nhiều ngày (`profile` của DaySession)
+  - cá lớn có Máu (cá đuối, lươn điện, cá hải tượng, cá bông lau, cá tra dầu): tuần tra, thấy người thì
+    đuổi, cắn trừ Máu (giáp đỡ trước); đánh bằng Space hoặc súng xiên; hạ được rơi nguyên liệu quý
+  - cá nhỏ (cả cá lạ: cá hề vàng, cá tai tượng) sinh thêm theo thời gian
 QuanPlus (buổi tối, quầy bar nhìn ngang):
   - nhiều ghế, khách đến dồn dập, mỗi khách gọi một món làm được từ kho (không giữ chỗ nguyên liệu)
   - bấm E ở bếp trống -> mở bảng nấu: chọn món cho bếp TỰ nấu (chậm, chất lượng "good") hoặc
@@ -45,6 +47,11 @@ def merged_tuning(tuning: dict, extras: dict) -> dict:
     return t
 
 
+def new_profile(extras: dict) -> dict:
+    """Ví + đồ nghề của người chơi, giữ qua các ngày."""
+    return {"money": int(extras["day"].get("start_money", 0)), "slots": [], "armor_hp": 0, "basket_level": 0}
+
+
 def makeable(menu: dict, stock: dict) -> list:
     return [d for d in sorted(menu) if all(stock.get(k, 0) >= c for k, c in menu[d]["recipe"].items())]
 
@@ -59,13 +66,31 @@ def _clamp(v, lo, hi):
 
 # =====================================================================================
 class GatherPlus(GatherSim):
-    def __init__(self, tuning, scenario, streams, ids, extras):
+    """Buổi sáng mở rộng. `profile` (do DaySession giữ, sống qua nhiều ngày) bị sửa trực tiếp:
+    {"money": int, "slots": [id đồ], "armor_hp": int, "basket_level": int}."""
+
+    def __init__(self, tuning, scenario, streams, ids, extras, profile=None):
         super().__init__(tuning, scenario, streams, ids)
         self.x = extras["gather"]
-        self.buffs = {"net_ticks": 0, "gun_ammo": 0, "oxy_shield_ticks": 0}
+        self.shop = self.x["shop"]
+        self.profile = profile if profile is not None else new_profile(extras)
+        self.t = copy.deepcopy(self.t)  # chỉnh sức chứa / tốc độ theo đồ mà không đụng tuning gốc
+        self.t["fish_yield"].update(self.x.get("fish_yield_extra", {}))
+        self._base_speed = self.t["swim_speed"]
+        self._base_hold = self.t["hold_capacity"]
+        self._base_oxygen = self.oxygen_max
+        self.buffs = {"speed_ticks": 0}
+        self.gun_ammo = self._item("gun")["ammo_per_dive"] if self._has("gun") else 0
         self.gun_cd_ticks = 0
+        self.ui = None
+        self._actions = []
         self.pickups = []
         self.projectiles = []
+        if "fish" not in scenario and scenario.get("random_fish", True):
+            for f in self.x.get("fish_initial_extra", []):
+                ids.reserve(f["id"])
+                self.fish.append({"id": f["id"], "kind": f["kind"], "pos": [float(c) for c in f["pos"]],
+                                  "heading_deg": f.get("heading_deg", 0)})
         self.big_fish = []
         for sp in self.x["big_fish_spawns"]:
             ids.reserve(sp["id"])
@@ -77,26 +102,113 @@ class GatherPlus(GatherSim):
         self.elapsed = 0
         self.next_pickup = _ticks(self.x["pickup_first_s"])
         self.next_fish = _ticks(self.x["fish_respawn_s"])
+        self._apply_gear(refill=True)
 
-    def _kind(self, f):
-        return self.x["big_kinds"][f["kind"]]
+    # --- đồ nghề --------------------------------------------------------------
+    def _has(self, item):
+        return item in self.profile["slots"]
+
+    def _item(self, item):
+        return self.shop["items"][item]
+
+    def _apply_gear(self, refill=False):
+        """Tính lại chỉ số từ đồ đang có: tốc bơi, oxy tối đa, sức chứa giỏ."""
+        speed = self._base_speed
+        if self._has("fins"):
+            speed *= self._item("fins")["speed_mult"]
+        if self.buffs["speed_ticks"] > 0:
+            speed *= self.x["buffs"]["speed"]["mult"]
+        self.t["swim_speed"] = speed
+        bonus = _ticks(self._item("tank")["oxygen_bonus_s"]) if self._has("tank") else 0
+        self.oxygen_max = self._base_oxygen + bonus
+        self.oxygen_ticks = self.oxygen_max if refill else min(self.oxygen_ticks, self.oxygen_max)
+        self.t["hold_capacity"] = self._base_hold + self.shop["basket"]["step"] * self.profile["basket_level"]
+
+    def queue_action(self, action: dict):
+        self._actions.append(action)
+
+    def _near_shop(self):
+        return self._at_surface() and math.dist(self.pos, self.shop["pos"]) <= self.shop["radius"]
+
+    def _apply_action(self, a, events):
+        kind = a.get("type")
+        if kind == "close":
+            self.ui = None
+            return
+        if kind not in ("buy", "sell") or self.ui is None or not self._near_shop():
+            return
+        item, prof = a.get("item"), self.profile
+        if kind == "sell":
+            if not self._has(item):
+                return
+            prof["slots"].remove(item)
+            if item == "armor":
+                prof["armor_hp"] = 0
+            if item == "gun":
+                self.gun_ammo = 0
+            got = int(self._item(item)["price"] * self.shop["sell_rate"])
+            prof["money"] += got
+            self._apply_gear()
+            events.append(("shop_sell", {"item": item, "money_got": got, "money": prof["money"]}))
+            return
+        if item == "basket":
+            prices = self.shop["basket"]["prices"]
+            lv = prof["basket_level"]
+            if lv >= len(prices):
+                events.append(("shop_fail", {"item": item, "reason": "maxed"}))
+                return
+            if prof["money"] < prices[lv]:
+                events.append(("shop_fail", {"item": item, "reason": "money", "price": prices[lv]}))
+                return
+            prof["money"] -= prices[lv]
+            prof["basket_level"] += 1
+            self._apply_gear()
+            events.append(("shop_buy", {"item": item, "price": prices[lv], "money": prof["money"],
+                                        "hold_capacity": self.t["hold_capacity"]}))
+            return
+        if item not in self.shop["items"]:
+            return
+        price = self._item(item)["price"]
+        reason = ("owned" if self._has(item) else "slots" if len(prof["slots"]) >= self.shop["slots"]
+                  else "money" if prof["money"] < price else None)
+        if reason:
+            events.append(("shop_fail", {"item": item, "reason": reason, "price": price}))
+            return
+        prof["money"] -= price
+        prof["slots"].append(item)
+        if item == "armor":
+            prof["armor_hp"] = self._item("armor")["armor_hp"]
+        if item == "gun":
+            self.gun_ammo = self._item("gun")["ammo_per_dive"]
+        self._apply_gear(refill=item == "tank")
+        events.append(("shop_buy", {"item": item, "price": price, "money": prof["money"]}))
 
     # --- một bước ---------------------------------------------------------------
     def step(self, inp):
         self.elapsed += 1
-        b = self.buffs
-        b["net_ticks"] = max(0, b["net_ticks"] - 1)
-        b["oxy_shield_ticks"] = max(0, b["oxy_shield_ticks"] - 1)
+        events = []
+        actions, self._actions = self._actions, []
+        for a in actions:
+            self._apply_action(a, events)
+        if self.buffs["speed_ticks"] > 0:
+            self.buffs["speed_ticks"] -= 1
+            if self.buffs["speed_ticks"] == 0:
+                self._apply_gear()
         self.gun_cd_ticks = max(0, self.gun_cd_ticks - 1)
         catch = inp.pressed("catch")
+        interact = inp.pressed("interact")
+        if interact and self._near_shop():  # E ở ghe tạp hóa -> mở tiệm, không chuyển cho luật gốc
+            interact = False
+            self.ui = {"type": "shop"}
+            events.append(("shop_open", {}))
         # nút catch do lớp này xử lý (bắn / đánh / lưới); lớp gốc lo bơi, oxy, hái, cập bến, đồng hồ
-        base_inp = InputState(inp.move, inp.held, {"interact"} if inp.pressed("interact") else set())
-        events = super().step(base_inp)
+        base_inp = InputState(inp.move, inp.held, {"interact"} if interact else set())
+        events += super().step(base_inp)
         if self.done:
             return events
+        if self.ui and (not self._at_surface() or math.dist(self.pos, self.shop["pos"]) > self.shop["radius"] + 0.5):
+            self.ui = None
         under = not self._at_surface()
-        if under and b["oxy_shield_ticks"] > 0:
-            self.oxygen_ticks = min(self.oxygen_max, self.oxygen_ticks + 1)  # bù lại phần lớp gốc vừa trừ
         if catch and under:
             self._use_catch(events)
         self._update_projectiles(events)
@@ -108,17 +220,17 @@ class GatherPlus(GatherSim):
         return events
 
     def _use_catch(self, events):
-        gun = self.x["buffs"]["gun"]
-        if self.buffs["gun_ammo"] > 0:
+        if self._has("gun") and self.gun_ammo > 0:
             if self.gun_cd_ticks > 0:
                 return
+            gun = self._item("gun")
             a = math.radians(self.heading)
             pid = self.ids.new("H")
             self.projectiles.append({"id": pid, "pos": list(self.pos),
                                      "vel": [math.cos(a) * gun["speed"], math.sin(a) * gun["speed"]], "dist": 0.0})
-            self.buffs["gun_ammo"] -= 1
+            self.gun_ammo -= 1
             self.gun_cd_ticks = _ticks(gun["cooldown_s"])
-            events.append(("harpoon_fired", {"id": pid, "ammo": self.buffs["gun_ammo"]}))
+            events.append(("harpoon_fired", {"id": pid, "ammo": self.gun_ammo}))
             return
         if self.catch_cd_ticks > 0:
             return
@@ -129,10 +241,11 @@ class GatherPlus(GatherSim):
         if bigs:
             f = min(bigs, key=lambda f: (math.dist(self.pos, f["pos"]), f["id"]))
             self.catch_cd_ticks = cd
-            self._damage_big(f, self.x["melee_damage"], "melee", events)
+            dmg = self._item("knife")["melee_damage"] if self._has("knife") else self.x["melee_damage"]
+            self._damage_big(f, dmg, "knife" if self._has("knife") else "melee", events)
             return
-        net = self.buffs["net_ticks"] > 0
-        radius = reach * (self.x["buffs"]["net"]["radius_mult"] if net else 1)
+        net = self._has("net")
+        radius = reach * (self._item("net")["radius_mult"] if net else 1)
         cands = sorted((f for f in self.fish if math.dist(self.pos, f["pos"]) <= radius),
                        key=lambda f: (math.dist(self.pos, f["pos"]), f["id"]))
         if not net:
@@ -155,6 +268,9 @@ class GatherPlus(GatherSim):
         events.append(("fish_caught", {"fish_id": fish["id"], "kind": fish["kind"], "yield": amount, "tool": tool}))
         return True
 
+    def _kind(self, f):
+        return self.x["big_kinds"][f["kind"]]
+
     def _damage_big(self, f, dmg, tool, events):
         f["hp"] = max(0, f["hp"] - dmg)
         f["hurt_ticks"] = 12
@@ -175,7 +291,7 @@ class GatherPlus(GatherSim):
         events.append(("big_fish_defeated", {"id": f["id"], "kind": f["kind"], "drop": got, "pos": list(f["pos"])}))
 
     def _update_projectiles(self, events):
-        gun = self.x["buffs"]["gun"]
+        gun = self._item("gun")
         bx, bd = self.t["bounds"]["x"], self.t["bounds"]["d"]
         keep = []
         for p in self.projectiles:
@@ -205,7 +321,7 @@ class GatherPlus(GatherSim):
                 f["respawn_ticks"] -= 1
                 if f["respawn_ticks"] <= 0:
                     f.update(alive=True, hp=f["hp_max"], pos=list(f["home"]), state="patrol", recoil_ticks=0)
-                    events.append(("big_fish_respawn", {"id": f["id"]}))
+                    events.append(("big_fish_respawn", {"id": f["id"], "kind": f["kind"]}))
                 continue
             f["hurt_ticks"] = max(0, f["hurt_ticks"] - 1)
             dx, dd = self.pos[0] - f["pos"][0], self.pos[1] - f["pos"][1]
@@ -229,14 +345,22 @@ class GatherPlus(GatherSim):
             f["pos"][0] = _clamp(f["pos"][0] + vx / TICK, bx[0], bx[1])
             f["pos"][1] = _clamp(f["pos"][1] + vd / TICK, k["min_depth"], bd[1])
             if under and self.invuln_ticks == 0 and math.dist(self.pos, f["pos"]) <= k["hit_radius"]:
-                self.hp = max(0, self.hp - k["damage"])
+                prof = self.profile
+                if self._has("armor") and prof["armor_hp"] > 0:  # giáp bong bóng đỡ trọn cú cắn
+                    prof["armor_hp"] -= 1
+                    events.append(("armor_hit", {"by": f["id"], "kind": f["kind"], "armor_hp": prof["armor_hp"]}))
+                    if prof["armor_hp"] <= 0:
+                        prof["slots"].remove("armor")
+                        events.append(("armor_broken", {}))
+                else:
+                    self.hp = max(0, self.hp - k["damage"])
+                    events.append(("player_hurt", {"by": f["id"], "kind": f["kind"], "hp": self.hp, "damage": k["damage"]}))
                 self.invuln_ticks = _ticks(self.x["hurt_invuln_s"])
                 f["recoil_ticks"] = _ticks(self.x["big_recoil_s"])  # cắn xong thì bơi ra xa một lúc
                 kb = self.x["knockback_m"]  # đẩy người chơi ra xa con cá
                 px, pd = (dx / dist, dd / dist) if dist > 1e-6 else (float(f["dir"]), 0.0)
                 self.pos[0] = _clamp(self.pos[0] + px * kb, bx[0], bx[1])
                 self.pos[1] = _clamp(self.pos[1] + pd * kb, bd[0], bd[1])
-                events.append(("player_hurt", {"by": f["id"], "kind": f["kind"], "hp": self.hp}))
                 if self.hp <= 0:
                     events.append(("faint", {"hp": 0}))
                     self.hold.clear()
@@ -256,21 +380,17 @@ class GatherPlus(GatherSim):
                 self.pickups.append(p)
                 events.append(("pickup_spawned", dict(p)))
         for p in sort_by_id(list(self.pickups)):
-            if math.dist(self.pos, p["pos"]) <= x["pickup_radius"]:
-                self.pickups.remove(p)
-                self._apply_buff(p["kind"])
-                events.append(("pickup", {"id": p["id"], "kind": p["kind"], "buffs": dict(self.buffs)}))
-
-    def _apply_buff(self, kind):
-        cfg = self.x["buffs"][kind]
-        if kind == "oxy":
-            self.oxygen_ticks = self.oxygen_max
-            self.zero_oxy_ticks = 0
-            self.buffs["oxy_shield_ticks"] = _ticks(cfg["shield_s"])
-        elif kind == "net":
-            self.buffs["net_ticks"] = _ticks(cfg["duration_s"])
-        elif kind == "gun":
-            self.buffs["gun_ammo"] = min(cfg["ammo_max"], self.buffs["gun_ammo"] + cfg["ammo"])
+            if math.dist(self.pos, p["pos"]) > x["pickup_radius"]:
+                continue
+            if p["kind"] == "heal" and self.hp >= self.t["hp_max"]:
+                continue  # đủ máu thì để lại cho lúc cần
+            self.pickups.remove(p)
+            if p["kind"] == "heal":
+                self.hp = min(self.t["hp_max"], self.hp + x["buffs"]["heal"]["hp"])
+            else:
+                self.buffs["speed_ticks"] = _ticks(x["buffs"]["speed"]["duration_s"])
+                self._apply_gear()
+            events.append(("pickup", {"id": p["id"], "kind": p["kind"], "hp": self.hp}))
 
     def _respawn_fish(self, events):
         x = self.x
@@ -280,7 +400,9 @@ class GatherPlus(GatherSim):
         if len(self.fish) >= x["fish_max"]:
             return
         r = self.rng.get("extras_fish")
-        f = {"id": self.ids.new("F"), "kind": r.choice(x["fish_kinds"]),
+        kinds = sorted(x["fish_kinds"])
+        kind = r.choices(kinds, weights=[x["fish_kinds"][k] for k in kinds])[0]
+        f = {"id": self.ids.new("F"), "kind": kind,
              "pos": [round(r.uniform(*x["fish_x"]), 2), round(r.uniform(*x["fish_depth"]), 2)],
              "heading_deg": r.choice([0, 180])}
         self.fish.append(f)
@@ -288,7 +410,12 @@ class GatherPlus(GatherSim):
 
     def snapshot(self) -> dict:
         s = super().snapshot()
+        prof = self.profile
         s["buffs"] = dict(self.buffs)
+        s["gear"] = {"slots": list(prof["slots"]), "armor_hp": prof["armor_hp"], "basket_level": prof["basket_level"],
+                     "money": prof["money"], "gun_ammo": self.gun_ammo, "swim_speed": round(self.t["swim_speed"], 3),
+                     "catch_radius": self.t["catch_radius"] * (self._item("net")["radius_mult"] if self._has("net") else 1)}
+        s["ui"] = dict(self.ui) if self.ui else None
         s["gun_cd_ticks"] = self.gun_cd_ticks
         s["pickups"] = [{"id": p["id"], "kind": p["kind"], "pos": list(p["pos"])} for p in sort_by_id(self.pickups)]
         s["big_fish"] = [{k: (list(f[k]) if k == "pos" else f[k])
