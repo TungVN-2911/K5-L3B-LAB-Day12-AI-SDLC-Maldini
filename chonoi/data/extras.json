@@ -1,0 +1,287 @@
+{
+  "_note": "Số liệu phần SÁNG TẠO của nhóm. Chỉ dùng ở cửa sổ chơi `python -m chonoi.live --mode day`; headless / Test Contract không đọc file này.",
+  "day": {
+    "transition_s": 4,
+    "start_stock": {}
+  },
+  "gather": {
+    "fish_respawn_s": 12,
+    "fish_max": 8,
+    "fish_kinds": [
+      "ca_linh",
+      "ca_loc"
+    ],
+    "fish_x": [
+      8,
+      96
+    ],
+    "fish_depth": [
+      3,
+      26
+    ],
+    "pickup_first_s": 4,
+    "pickup_spawn_s": 9,
+    "pickup_max": 4,
+    "pickup_radius": 1.4,
+    "pickup_x": [
+      8,
+      96
+    ],
+    "pickup_depth": [
+      3,
+      27
+    ],
+    "pickup_weights": {
+      "gun": 3,
+      "net": 3,
+      "oxy": 4
+    },
+    "buffs": {
+      "oxy": {
+        "shield_s": 10
+      },
+      "net": {
+        "duration_s": 15,
+        "radius_mult": 1.8
+      },
+      "gun": {
+        "ammo": 8,
+        "ammo_max": 16,
+        "damage": 2,
+        "speed": 18,
+        "range": 10,
+        "cooldown_s": 0.3,
+        "fish_hit_radius": 1.0
+      }
+    },
+    "melee_damage": 1,
+    "hurt_invuln_s": 2.0,
+    "knockback_m": 1.5,
+    "big_kinds": {
+      "ca_duoi": {
+        "hp": 4,
+        "speed": 2.6,
+        "chase_speed": 3.2,
+        "aggro": 5,
+        "hit_radius": 1.2,
+        "damage": 1,
+        "min_depth": 3,
+        "drop": {
+          "ca_duoi": 1
+        },
+        "respawn_s": 30
+      },
+      "ca_bong_lau": {
+        "hp": 7,
+        "speed": 2.0,
+        "chase_speed": 2.8,
+        "aggro": 5,
+        "hit_radius": 1.6,
+        "damage": 1,
+        "min_depth": 4,
+        "drop": {
+          "ca_bong_lau": 1
+        },
+        "respawn_s": 40
+      }
+    },
+    "big_fish_spawns": [
+      {
+        "id": "BF1",
+        "kind": "ca_duoi",
+        "pos": [
+          40,
+          18
+        ],
+        "patrol": [
+          30,
+          52
+        ]
+      },
+      {
+        "id": "BF2",
+        "kind": "ca_bong_lau",
+        "pos": [
+          82,
+          23
+        ],
+        "patrol": [
+          66,
+          96
+        ]
+      }
+    ],
+    "big_recoil_s": 2.5
+  },
+  "quan": {
+    "override": {
+      "duration_s": 150,
+      "bounds": {
+        "x": [
+          1,
+          23
+        ],
+        "z": [
+          1,
+          1
+        ]
+      },
+      "start_pos": [
+        12,
+        1
+      ],
+      "interact_radius": 1.5,
+      "stoves": [
+        {
+          "id": "B1",
+          "pos": [
+            18.5,
+            1.6
+          ]
+        },
+        {
+          "id": "B2",
+          "pos": [
+            20.5,
+            1.6
+          ]
+        },
+        {
+          "id": "B3",
+          "pos": [
+            22.5,
+            1.6
+          ]
+        }
+      ],
+      "tables": [
+        {
+          "id": "S1",
+          "pos": [
+            2,
+            0
+          ]
+        },
+        {
+          "id": "S2",
+          "pos": [
+            4,
+            0
+          ]
+        },
+        {
+          "id": "S3",
+          "pos": [
+            6,
+            0
+          ]
+        },
+        {
+          "id": "S4",
+          "pos": [
+            8,
+            0
+          ]
+        },
+        {
+          "id": "S5",
+          "pos": [
+            10,
+            0
+          ]
+        },
+        {
+          "id": "S6",
+          "pos": [
+            12,
+            0
+          ]
+        },
+        {
+          "id": "S7",
+          "pos": [
+            14,
+            0
+          ]
+        },
+        {
+          "id": "S8",
+          "pos": [
+            16,
+            0
+          ]
+        }
+      ],
+      "first_customer_tick": 90,
+      "customer_interval_s": 8,
+      "patience_s": 60,
+      "eat_s": 7
+    },
+    "auto_cook_mult": 1.6,
+    "cold_after_s": 10,
+    "max_ingredients": 6,
+    "quality_score": {
+      "great": 2,
+      "good": 1,
+      "cold": 0
+    },
+    "patience_bands": [
+      0.6,
+      0.3
+    ],
+    "moods": [
+      {
+        "min_score": 4,
+        "mood": "rat_hai_long",
+        "tip": 0.3,
+        "rep": 0.3
+      },
+      {
+        "min_score": 2,
+        "mood": "hai_long",
+        "tip": 0.15,
+        "rep": 0.1
+      },
+      {
+        "min_score": 1,
+        "mood": "binh_thuong",
+        "tip": 0,
+        "rep": 0
+      },
+      {
+        "min_score": 0,
+        "mood": "khong_hai_long",
+        "tip": 0,
+        "rep": -0.2
+      }
+    ],
+    "out_of_stock_order_chance": 0.2,
+    "leave_s": 2.5,
+    "out_of_stock_rep": -0.1
+  },
+  "menu_extra": {
+    "canh_chua_ca_loc": {
+      "recipe": {
+        "bong_sung": 1,
+        "ca_loc": 1
+      },
+      "cook_s": 7,
+      "price": 90
+    },
+    "ca_duoi_nuong_muoi_ot": {
+      "recipe": {
+        "ca_duoi": 1
+      },
+      "cook_s": 6,
+      "price": 140
+    },
+    "lau_ca_bong_lau": {
+      "recipe": {
+        "bong_dien_dien": 1,
+        "ca_bong_lau": 1
+      },
+      "cook_s": 9,
+      "price": 200
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gather",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "chonoi.live",
+        "--mode",
+        "gather",
+        "--port",
+        "8765"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "quan",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "chonoi.live",
+        "--mode",
+        "quan",
+        "--port",
+        "8766",
+        "--inventory",
+        "docs/contracts/inventory.sample.json"
+      ],
+      "port": 8766
+    },
+    {
+      "name": "day",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "chonoi.live",
+        "--mode",
+        "day",
+        "--port",
+        "8767"
+      ],
+      "port": 8767
+    }
+  ]
+}

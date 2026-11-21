@@ -1,11 +1,15 @@
 """Cửa sổ chơi trực tiếp bằng TRÌNH DUYỆT, chỉ dùng thư viện chuẩn Python.
 
-    python3 -m chonoi.live --mode gather|quan [--seed N] [--port 8000]
+    python3 -m chonoi.live --mode gather|quan|day [--seed N] [--port 8000]
+
+`--mode day` (phần sáng tạo của nhóm, xem chonoi/day.py): nối sáng -> tối -> sáng... thành vòng lặp,
+dùng luật mở rộng GatherPlus/QuanPlus. Headless KHÔNG có chế độ này.
 
 Máy chủ HTTP nhỏ (ThreadingHTTPServer) phục vụ `chonoi/web/index.html` và hai API:
     GET  /state  -> snapshot JSON hiện tại (cùng trường như dòng snapshot của headless) + `meta` + `events`
     POST /input  -> {"move": [a, b], "interact": bool, "catch": bool}   (trạng thái phím đang giữ)
     POST /restart -> chơi lại từ đầu (cùng seed, cùng scenario)
+    POST /action -> lệnh rời rạc của bảng nấu (chỉ --mode day): {"type": "cook"|"quick_cook"|"close"|"trash", ...}
 
 Mô phỏng chạy 60 tick/s trong một luồng nền, dùng CÙNG lớp sim như headless (qua `runner.Session`).
 Client chỉ ĐỌC snapshot và tự bỏ qua trường chưa có, nên luật do nhóm viết thêm trường nào cũng không vỡ.
@@ -22,6 +26,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .contract import load_contract
+from .day import DaySession
 from .errors import BadInput
 from .inputs import LiveInputs
 from .inventory import read_inventory
@@ -48,7 +53,10 @@ class LiveGame:
         self._reset()
 
     def _reset(self):
-        self.session = Session(*self._args)
+        if self.mode == "day":
+            self.session = DaySession(self.tuning, self._args[3])
+        else:
+            self.session = Session(*self._args)
         self.inputs = LiveInputs()
         self.events = []
         self._saved = False
@@ -101,7 +109,7 @@ class LiveGame:
     def state_json(self) -> bytes:
         with self._lock:
             snap = self.session.snapshot()
-            snap["meta"] = self.tuning[self.mode]
+            snap["meta"] = self.session.meta() if hasattr(self.session, "meta") else self.tuning[self.mode]
             snap["events"] = list(self.events)
             snap["finished"] = self.session.done
             snap["reason"] = self.session.sim.reason if self.session.done else None
@@ -123,6 +131,29 @@ class LiveGame:
                 buttons[b] = body[b]
         with self._lock:
             self.inputs.set(move, **buttons)
+
+    def action(self, body: dict):
+        kind = body.get("type")
+        if kind not in ("cook", "quick_cook", "close", "trash"):
+            raise ValueError("type phải là cook | quick_cook | close | trash")
+        if kind == "quick_cook" and not isinstance(body.get("dish_id"), str):
+            raise ValueError("quick_cook cần dish_id")
+        if kind == "cook":
+            if not isinstance(body.get("stove_id"), str):
+                raise ValueError("cook cần stove_id")
+            dish, ing = body.get("dish_id"), body.get("ingredients")
+            if (dish is None) == (ing is None):
+                raise ValueError("cook cần đúng một trong dish_id | ingredients")
+            if dish is not None and not isinstance(dish, str):
+                raise ValueError("dish_id phải là chuỗi")
+            if ing is not None and not (isinstance(ing, dict) and len(ing) <= 16 and all(
+                    isinstance(k, str) and isinstance(v, int) and not isinstance(v, bool) and 0 < v <= 99
+                    for k, v in ing.items())):
+                raise ValueError("ingredients phải là {id: số nguyên dương}")
+        with self._lock:
+            if not hasattr(self.session, "queue_action"):
+                raise ValueError("/action chỉ dùng với --mode day")
+            self.session.queue_action({k: body[k] for k in ("type", "stove_id", "dish_id", "ingredients") if k in body})
 
     def restart(self):
         with self._lock:
@@ -173,6 +204,11 @@ class _Handler(BaseHTTPRequestHandler):
                 if not isinstance(body, dict):
                     raise ValueError("body phải là object")
                 self.game.set_input(body)
+            elif path == "/action":
+                body = json.loads(raw.decode("utf-8") or "{}")
+                if not isinstance(body, dict):
+                    raise ValueError("body phải là object")
+                self.game.action(body)
             elif path == "/restart":
                 self.game.restart()
             else:
@@ -215,7 +251,7 @@ class LiveServer:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="chonoi.live", description="Chơi trực tiếp trên trình duyệt (starter).")
-    p.add_argument("--mode", required=True, choices=["gather", "quan"])
+    p.add_argument("--mode", required=True, choices=["gather", "quan", "day"])
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--port", type=int, default=8000, help="0 = cổng ngẫu nhiên")
     p.add_argument("--host", default="127.0.0.1")
@@ -224,12 +260,14 @@ def main(argv=None) -> int:
     p.add_argument("--inventory-out", dest="inventory_out", help="chỉ với gather: ghi kho khi kết thúc buổi")
     a = p.parse_args(argv)
     try:
+        if a.mode == "day" and (a.scenario or a.inventory or a.inventory_out):
+            raise BadInput("--mode day không nhận --scenario / --inventory / --inventory-out")
         if a.inventory and a.mode != "quan":
             raise BadInput("--inventory chỉ dùng với quan")
         if a.inventory_out and a.mode != "gather":
             raise BadInput("--inventory-out chỉ dùng với gather")
         tuning = load_contract()["tuning"]
-        scenario = load_scenario(a.scenario, a.mode, tuning)
+        scenario = load_scenario(a.scenario, a.mode, tuning) if a.mode != "day" else {}
         inventory = read_inventory(a.inventory) if a.inventory else None
         if inventory is not None and "stock" in scenario:
             raise BadInput("vừa có quan.stock vừa có --inventory")

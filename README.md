@@ -54,3 +54,27 @@ Hết giờ mỗi phase thì gắn tag rồi đi tiếp; chỗ chưa xong ghi tr
 
 - Dùng AI thoải mái; **không sao chép repo của nhóm khác**; bằng chứng phải thật.
 - Nhân vật, bối cảnh là bản gốc của lab; asset ngoài chỉ dùng CC0/CC-BY/MIT hoặc tự tạo, ghi nguồn trong `CREDITS.md`. Không commit API key, token, `.env`.
+
+## Sáng tạo của nhóm
+
+**Đồ họa 2D cho cửa sổ chơi** (`chonoi/web/index.html`). Chỉ là phần hiển thị phía client; luật, snapshot và headless không đổi.
+- Hình đều tự vẽ bằng Canvas 2D, không có asset ngoài. Gather: sông buổi sáng có trời, mây, hàng dừa, nhà sàn, tia nắng dưới nước, rong và đáy bùn; bến ghe treo cây bẹo; bông súng, bông điên điển; cá lóc và đàn cá linh vẫy đuôi; thợ lặn quàng khăn rằn, đạp chân và sải tay. Quán: ghe nổi về đêm có sàn gỗ, đèn lồng, bếp lò có lửa và hơi nước, bàn có ghế đẩu, khách gọi món kèm vòng kiên nhẫn, đầu bếp đội nón lá bưng khay.
+- Chơi mượt hơn: client giữ bộ đệm snapshot, đồng bộ nhịp 60 tick/s và **nội suy** vị trí (hiển thị trễ khoảng 3 tick). Camera đi theo người chơi một cách mượt; góc quay và hoạt ảnh làm mịn theo thời gian thực.
+- Hiệu ứng theo sự kiện: hạt, chữ bay, rung màn hình, viền tối khi sắp hết oxy, thông báo tiếng Việt và âm thanh tổng hợp bằng WebAudio (phím `M` tắt/bật). Có gợi ý phím `E`/`Space` ngay tại vật đang trong tầm, bản đồ nhỏ của sông, phiếu gọi món và màn hình tổng kết.
+- Phím `` ` `` (hoặc F2) bật chế độ debug: hiện id thực thể, nhật ký sự kiện thô, tick, fps.
+
+**Chế độ "một ngày" liền mạch** — `python3 -m chonoi.live --mode day`. Hướng dẫn chơi chi tiết: [Play.md](Play.md). Đây chỉ là cửa sổ chơi; headless và Test Contract vẫn chạy `GatherSim`/`QuanSim` gốc.
+- **Vòng lặp:** sáng lặn bắt cá → cập bến / hết giờ → màn chuyển cảnh → tối mở quán với kho = kho còn dư + giỏ vừa bắt → hết giờ hoặc **hết hàng để bán** → thông báo rồi quay lại sông vào ngày hôm sau. Nếu kho không đủ nấu món nào thì bỏ qua buổi tối. Tiền và uy tín cộng dồn qua các ngày.
+- **Dưới nước** (`GatherPlus`):
+  - Có buff **Bình oxy** (đầy oxy, kèm khiên không tụt oxy), **Lưới lớn** (bán kính rộng hơn, một lần bắt hết cá trong tầm) và **Súng xiên** (Space bắn theo hướng mặt, có giới hạn đạn).
+  - **Cá lớn có Máu** (cá đuối, cá bông lau) tuần tra; khi thấy người chơi thì đuổi, cắn trúng thì trừ Máu. Đánh bằng Space hoặc súng xiên; hạ được thì rơi nguyên liệu quý cho món đắt tiền.
+  - Cá nhỏ sinh thêm theo thời gian.
+- **Quán nhìn ngang** (`QuanPlus`):
+  - Quầy bar 8 ghế, 3 bếp, nhiều khách cùng lúc. Bảng món trên vách cho biết mỗi món còn nấu được bao nhiêu phần.
+  - Bấm E ở bếp trống để mở bảng nấu, có hai cách: **giao món cho bếp tự nấu** (chậm, ngon vừa) hoặc **tự chọn nguyên liệu** (đúng công thức thì nhanh và ngon nhất; sai thì hỏng món, mất nguyên liệu). Món để lâu trên bếp sẽ **nguội**.
+  - **Nấu nhanh:** bấm vào **phiếu order** (bảng bên bếp, liệt kê món khách đã gọi) hoặc bấm **tấm bảng món** trên vách, hoặc phím số `1`–`8` → bếp trống đầu tiên tự nấu, không cần đi tới bếp.
+- **Hết nguyên liệu cho món khách gọi:** khách được báo ("Hết món!", món bị gạch chéo), hiện mặt **thất vọng** rồi rời quán (uy tín −0,1).
+- **Cảm xúc khách:** biểu tượng mặt hiện theo thời gian chờ. Sau khi phục vụ, mức hài lòng tính từ chất lượng món + thời gian chờ, quyết định tip và uy tín, kèm lời nhận xét. Khách bỏ về thì hiện mặt giận.
+- Số liệu nằm trong `chonoi/data/extras.json`, luật trong `chonoi/sim/extras.py` và `chonoi/day.py`, test trong `tests/test_extras.py`.
+- **Đã sửa file khung** `chonoi/live.py` (đã báo nhóm): thêm `--mode day` và `POST /action` (lệnh của bảng nấu). Hai chế độ `gather`/`quan` cũ giữ nguyên hành vi.
+
